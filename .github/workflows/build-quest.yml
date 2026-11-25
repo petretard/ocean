@@ -50,7 +50,12 @@ jobs:
             --target android \
             --android-api-level 29 \
             --config release \
-            --install-dir "$HOME/install_ocean_thirdparty"
+            --verbose \
+            --install-dir "$HOME/install_ocean_thirdparty" || {
+              echo "=== CURL BUILD LOG ==="
+              find /home/runner/work/ocean/ocean/ocean_3rdparty/build/curl -name "build.log" -exec tail -n 80 {} +
+              exit 1
+            }
 
       - name: Locate & Build ExternalCamera Quest APK
         run: |
