@@ -45,11 +45,11 @@ jobs:
           echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
           echo "ANDROID_NDK_VERSION=26.3.11579264" >> $GITHUB_ENV
 
-      - name: Build Ocean 3rd-party libraries (Android arm64)
+      - name: Build Ocean 3rd-party libraries (Android)
         run: |
           python build/python/build_ocean_3rdparty.py \
-            --platform android \
-            --arch arm64 \
+            --target android \
+            --android-api-level 29 \
             --config release \
             --install-dir "$HOME/install_ocean_thirdparty"
 
