@@ -37,6 +37,7 @@ jobs:
           export ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/cmdline-tools/16.0/bin:$ANDROID_HOME/platform-tools:$PATH"
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "CMAKE_POLICY_VERSION_MINIMUM=3.5" >> $GITHUB_ENV
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-32" "platforms;android-34" "build-tools;34.0.0" "ndk;26.3.11579264"
           echo "ANDROID_NDK=$ANDROID_HOME/ndk/26.3.11579264" >> $GITHUB_ENV
@@ -53,4 +54,34 @@ jobs:
 
       - name: Locate & Build ExternalCamera Quest APK
         run: |
-          export OCEAN_THIRDPARTY_PATH="$HOME/install_
+          export OCEAN_THIRDPARTY_PATH="$HOME/install_ocean_thirdparty"
+          echo "=== Inspecting Quest Gradle/CMake paths ==="
+          find build -maxdepth 8 -iname "*externalcamera*" -o -iname "*quest*"
+          
+          GRADLE_DIR=$(find build/gradle -type d -iname "*externalcamera*" | head -n 1)
+          if [ -n "$GRADLE_DIR" ] && [ -f "$GRADLE_DIR/gradlew" ]; then
+            echo "Found Gradle project at: $GRADLE_DIR"
+            cd "$GRADLE_DIR"
+            chmod +x gradlew
+            ./gradlew assembleRelease || ./gradlew assembleDebug
+          else
+            echo "Fallback: building via build_ocean.py"
+            python build/python/build_ocean.py \
+              --platform android \
+              --arch arm64 \
+              --config release \
+              --third-party-dir "$OCEAN_THIRDPARTY_PATH"
+          fi
+
+      - name: Collect generated APKs
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/output_apks"
+          find . -name "*.apk" -exec cp -v {} "$GITHUB_WORKSPACE/output_apks/" \;
+          ls -lh "$GITHUB_WORKSPACE/output_apks/"
+
+      - name: Upload Quest APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocean-quest-externalcamera-apk
+          path: output_apks/*.apk
+          if-no-files-found: error
