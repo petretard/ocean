@@ -52,8 +52,13 @@ jobs:
             --config release \
             --verbose \
             --install-dir "$HOME/install_ocean_thirdparty" || {
+              echo "=== MBEDTLS INSTALL CHECK ==="
+              ls -la "$HOME/install_ocean_thirdparty" || true
+              find "$HOME/install_ocean_thirdparty" -maxdepth 4 -iname "*mbedtls*" || true
+              echo "=== MBEDTLS BUILD LOG ==="
+              find /home/runner/work/ocean/ocean/ocean_3rdparty/build -iname "*mbedtls*" -exec find {} -name "build.log" -exec tail -n 80 {} + \; || true
               echo "=== CURL BUILD LOG ==="
-              find /home/runner/work/ocean/ocean/ocean_3rdparty/build/curl -name "build.log" -exec tail -n 80 {} +
+              find /home/runner/work/ocean/ocean/ocean_3rdparty/build/curl -name "build.log" -exec tail -n 40 {} + || true
               exit 1
             }
 
