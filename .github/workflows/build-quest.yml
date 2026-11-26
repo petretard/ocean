@@ -19,21 +19,24 @@ jobs:
         with:
           python-version: "3.11"
 
-      - uses: android-actions/setup-android@v3
-
       - name: Install build tools
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build perl
           pip install -r build/python/requirements.txt
 
-      - name: Install NDK (version taken from Ocean's gradle files)
+      - name: Set up Android SDK and NDK (preinstalled on runner)
         run: |
-          NDK_VER=$(grep -rhoE 'ndkVersion\s*=\s*"[^"]+"' build/gradle | head -1 | grep -oE '"[^"]+"' | tr -d '"' || true)
+          set +e
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | "$SDKM" --licenses > /dev/null 2>&1
+          NDK_VER=$(grep -rhoE 'ndkVersion\s*=\s*"[^"]+"' build/gradle | head -1 | grep -oE '"[^"]+"' | tr -d '"')
           NDK_VER=${NDK_VER:-26.1.10909125}
           echo "Using NDK $NDK_VER"
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "ndk;$NDK_VER" "platform-tools"
+          if [ ! -d "$ANDROID_HOME/ndk/$NDK_VER" ]; then
+            "$SDKM" "ndk;$NDK_VER" || { echo "NDK install failed"; exit 1; }
+          fi
           echo "ANDROID_NDK_VERSION=$NDK_VER" >> $GITHUB_ENV
           echo "ANDROID_NDK=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VER" >> $GITHUB_ENV
