@@ -1,0 +1,19 @@
+name: Inspect framebuffer and layer code
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show clear color, alpha and layer code
+        run: |
+          echo "===== clear / background color usage ====="
+          grep -rn -iE "setClearColor|clearColor|glClearColor|backgroundColor" impl/ocean/platform/meta/quest impl/ocean/platform/openxr impl/ocean/rendering/glescenegraph impl/application/ocean/demo/platform/meta/quest/openxr --include=*.cpp --include=*.h | cut -c1-230 | head -40
+          echo "===== projection layer flags ====="
+          grep -rn -E "XrCompositionLayerProjection|layerFlags|BLEND_TEXTURE_SOURCE_ALPHA|environmentBlendMode|ALPHA_BLEND" impl/ocean/platform --include=*.cpp --include=*.h | cut -c1-230 | head -30
+          echo "===== the working demo ====="
+          cat impl/application/ocean/demo/platform/meta/quest/openxr/vrnativeapplicationadvanced/quest/OpenXRVRNativeApplicationAdvanced.cpp | head -70
