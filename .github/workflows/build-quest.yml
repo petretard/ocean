@@ -46,6 +46,15 @@ jobs:
           python build/python/build_ocean_3rdparty.py --target android_arm64 --log-level verbose 2>&1 | tee 3rdparty.log
           exit ${PIPESTATUS[0]}
 
+      - name: Show curl build log on failure
+        if: failure()
+        run: |
+          LOG=$(find ocean_3rdparty/build/curl -name build.log | head -1)
+          echo "Log file: $LOG"
+          grep -n -iE "error|could not|not found|missing" "$LOG" | head -40
+          echo "----- last 40 lines -----"
+          tail -n 40 "$LOG"
+
       - name: Build ExternalCamera APK
         run: |
           export OCEAN_DEVELOPMENT_PATH="$GITHUB_WORKSPACE"
@@ -71,3 +80,4 @@ jobs:
           path: |
             3rdparty.log
             gradle.log
+            ocean_3rdparty/build/**/build.log
