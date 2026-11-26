@@ -61,44 +61,77 @@ jobs:
           s = re.sub(r'\n[ \t]*ocean_platform_meta_quest_platformsdk(?=\n)', '', s)
           open(p, "w").write(s)
           EOF
-          grep -n "platformsdk" impl/application/ocean/demo/media/externalcamera/CMakeLists.txt || echo "platformsdk refs: none"
 
       - name: Build third-party libraries
         run: |
           python build/python/build_ocean_3rdparty.py --target android_arm64 --log-level verbose 2>&1 | tee 3rdparty.log
           exit ${PIPESTATUS[0]}
 
-      - name: Show failing library logs
-        if: failure()
-        run: |
-          for f in $(grep -rlE "CMake Error|FAILED:|error:" ocean_3rdparty/build --include=build.log | head -3); do
-            echo "=========== $f"
-            grep -nE -A6 "CMake Error|FAILED:|error:" "$f" | cut -c1-300 | head -40
-          done
-
       - name: Build ExternalCamera APK
         run: |
           export OCEAN_DEVELOPMENT_PATH="$GITHUB_WORKSPACE"
           export OCEAN_THIRDPARTY_PATH="$GITHUB_WORKSPACE/ocean_3rdparty/install"
           APP_DIR=$(find build/gradle -type d -path '*externalcamera/quest' | head -1)
-          echo "App dir: $APP_DIR"
           cd "$APP_DIR"
           chmod +x gradlew
           ./gradlew assembleDebug 2>&1 | tee "$GITHUB_WORKSPACE/gradle.log"
           exit ${PIPESTATUS[0]}
 
-      - name: Show build errors on failure
-        if: failure()
+      - name: Add OpenXR loader to APK, align and re-sign
         run: |
-          grep -nE "error:|undefined reference|fatal error|What went wrong" gradle.log | cut -c1-300 | head -30 || true
-          echo "===== who references openssl? ====="
-          grep -rIl -iE "libssl|OpenSSL" ocean_3rdparty/install /tmp/ocean/gradle 2>/dev/null | head -15 || true
+          set -e
+          cd "$GITHUB_WORKSPACE"
+          APK=$(find build/gradle -path '*outputs/apk/debug/*.apk' | head -1)
+          echo "Original APK: $APK"
+          WORK="$GITHUB_WORKSPACE/fix"
+          rm -rf "$WORK"; mkdir -p "$WORK/x" "$WORK/add/lib/arm64-v8a"
+          cp "$APK" "$WORK/app.apk"
+          cd "$WORK"
 
-      - name: Upload APK
+          echo "===== native libs inside original APK ====="
+          unzip -l app.apk | grep "lib/" || true
+          unzip -q app.apk 'lib/*' -d x || true
+          READELF="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          for f in x/lib/arm64-v8a/*.so; do
+            echo "--- $f needs:"
+            "$READELF" -d "$f" | grep NEEDED || true
+          done
+
+          if unzip -l app.apk | grep -q "libopenxr_loader.so"; then
+            echo "APK already contains libopenxr_loader.so - not adding another"
+            cp app.apk aligned_input.apk
+          else
+            echo "===== downloading Khronos OpenXR loader ====="
+            curl -fL -o loader.aar "https://repo1.maven.org/maven2/org/khronos/openxr/openxr_loader_for_android/1.1.54/openxr_loader_for_android-1.1.54.aar"
+            mkdir aar && unzip -q loader.aar -d aar
+            SO=$(find aar -path '*arm64-v8a*' -name libopenxr_loader.so | head -1)
+            echo "Found loader: $SO"
+            cp "$SO" add/lib/arm64-v8a/libopenxr_loader.so
+            zip -d app.apk 'META-INF/*' || true
+            (cd add && zip -0 -r ../app.apk lib/arm64-v8a/libopenxr_loader.so)
+            cp app.apk aligned_input.apk
+          fi
+
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "Using build-tools: $BT"
+          "$BT/zipalign" -p -f 4 aligned_input.apk aligned.apk
+
+          KS="$HOME/.android/debug.keystore"
+          if [ ! -f "$KS" ]; then
+            mkdir -p "$HOME/.android"
+            keytool -genkeypair -keystore "$KS" -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          "$BT/apksigner" sign --ks "$KS" --ks-pass pass:android --key-pass pass:android --out ExternalCamera-fixed.apk aligned.apk
+          "$BT/apksigner" verify ExternalCamera-fixed.apk && echo "APK signature OK"
+
+          mkdir -p "$GITHUB_WORKSPACE/fixed"
+          cp ExternalCamera-fixed.apk "$GITHUB_WORKSPACE/fixed/"
+
+      - name: Upload fixed APK
         uses: actions/upload-artifact@v4
         with:
-          name: ExternalCamera-debug-apk
-          path: "**/build/outputs/apk/debug/*.apk"
+          name: ExternalCamera-fixed-apk
+          path: fixed/ExternalCamera-fixed.apk
 
       - name: Upload logs
         if: always()
