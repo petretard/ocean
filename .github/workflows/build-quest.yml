@@ -26,6 +26,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build perl
+          sudo apt-get remove -y libssl-dev || true
+          sudo rm -f /usr/lib/x86_64-linux-gnu/libssl.so /usr/lib/x86_64-linux-gnu/libcrypto.so
           pip install -r build/python/requirements.txt
 
       - name: Set up Android SDK and NDK (preinstalled on runner)
@@ -59,8 +61,7 @@ jobs:
           s = re.sub(r'\n[ \t]*ocean_platform_meta_quest_platformsdk(?=\n)', '', s)
           open(p, "w").write(s)
           EOF
-          echo "--- remaining references (should be none) ---"
-          grep -n "platformsdk" impl/application/ocean/demo/media/externalcamera/CMakeLists.txt || echo "none"
+          grep -n "platformsdk" impl/application/ocean/demo/media/externalcamera/CMakeLists.txt || echo "platformsdk refs: none"
 
       - name: Build third-party libraries
         run: |
@@ -90,6 +91,8 @@ jobs:
         if: failure()
         run: |
           grep -nE "error:|undefined reference|fatal error|What went wrong" gradle.log | cut -c1-300 | head -30 || true
+          echo "===== who references openssl? ====="
+          grep -rIl -iE "libssl|OpenSSL" ocean_3rdparty/install /tmp/ocean/gradle 2>/dev/null | head -15 || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
