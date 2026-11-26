@@ -62,6 +62,43 @@ jobs:
           open(p, "w").write(s)
           EOF
 
+      - name: Enable passthrough background in ExternalCamera
+        run: |
+          python3 - <<'EOF'
+          base = "impl/application/ocean/demo/media/externalcamera/quest/"
+
+          # 1) manifest: declare the passthrough feature
+          p = base + "AndroidManifest.xml"
+          s = open(p).read()
+          anchor = '<uses-feature android:name="android.hardware.vr.headtracking" android:required="false" />'
+          assert anchor in s, "manifest anchor not found"
+          s = s.replace(anchor, anchor + '\n\t<uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="true" />', 1)
+          open(p, "w").write(s)
+
+          # 2) C++: start passthrough (same pattern as Ocean's own demos)
+          p = base + "ExternalCameraApplication.cpp"
+          s = open(p).read()
+          anchor = "VRNativeApplicationAdvanced::onPreRender(xrPredictedDisplayTime, predictedDisplayTime);\n"
+          assert anchor in s, "cpp anchor not found"
+          block = """
+	// show the real world behind the camera screen (Quest passthrough)
+	static bool passthroughStartAttempted = false;
+
+	if (!passthroughStartAttempted && passthrough_.isValid() && !passthrough_.isStarted())
+	{
+		passthroughStartAttempted = true;
+
+		if (!passthrough_.start())
+		{
+			Log::error() << "Failed to start passthrough";
+		}
+	}
+"""
+          s = s.replace(anchor, anchor + block, 1)
+          open(p, "w").write(s)
+          print("passthrough patch applied")
+          EOF
+
       - name: Build third-party libraries
         run: |
           python build/python/build_ocean_3rdparty.py --target android_arm64 --log-level verbose 2>&1 | tee 3rdparty.log
@@ -77,6 +114,11 @@ jobs:
           ./gradlew assembleDebug 2>&1 | tee "$GITHUB_WORKSPACE/gradle.log"
           exit ${PIPESTATUS[0]}
 
+      - name: Show build errors on failure
+        if: failure()
+        run: |
+          grep -nE "error:|undefined reference|fatal error|What went wrong|anchor not found" gradle.log | cut -c1-300 | head -30 || true
+
       - name: Add OpenXR loader to APK, align and re-sign
         run: |
           set -e
@@ -88,20 +130,10 @@ jobs:
           cp "$APK" "$WORK/app.apk"
           cd "$WORK"
 
-          echo "===== native libs inside original APK ====="
-          unzip -l app.apk | grep "lib/" || true
-          unzip -q app.apk 'lib/*' -d x || true
-          READELF="$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
-          for f in x/lib/arm64-v8a/*.so; do
-            echo "--- $f needs:"
-            "$READELF" -d "$f" | grep NEEDED || true
-          done
-
           if unzip -l app.apk | grep -q "libopenxr_loader.so"; then
-            echo "APK already contains libopenxr_loader.so - not adding another"
+            echo "APK already contains libopenxr_loader.so"
             cp app.apk aligned_input.apk
           else
-            echo "===== downloading Khronos OpenXR loader ====="
             curl -fL -o loader.aar "https://repo1.maven.org/maven2/org/khronos/openxr/openxr_loader_for_android/1.1.54/openxr_loader_for_android-1.1.54.aar"
             mkdir aar && unzip -q loader.aar -d aar
             SO=$(find aar -path '*arm64-v8a*' -name libopenxr_loader.so | head -1)
@@ -113,7 +145,6 @@ jobs:
           fi
 
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          echo "Using build-tools: $BT"
           "$BT/zipalign" -p -f 4 aligned_input.apk aligned.apk
 
           KS="$HOME/.android/debug.keystore"
