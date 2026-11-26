@@ -46,29 +46,17 @@ jobs:
 
       - name: Build Ocean 3rd-party libraries (Android arm64)
         run: |
-          mkdir -p "$HOME/install_ocean_thirdparty/android_arm64_static/mbedtls"
-          (
-            sleep 15
-            while true; do
-              for d in /home/runner/work/ocean/ocean/ocean_3rdparty/build/mbedtls/*/android_arm64_static/_install; do
-                if [ -d "$d" ]; then
-                  cp -rn "$d"/* "$HOME/install_ocean_thirdparty/android_arm64_static/mbedtls/" 2>/dev/null || true
-                fi
-              done
-              sleep 5
-            done
-          ) &
-          SYNC_PID=$!
-          trap 'kill $SYNC_PID 2>/dev/null || true' EXIT
-
           python build/python/build_ocean_3rdparty.py \
             --target android_arm64 \
             --android-api-level 29 \
             --config release \
             --verbose \
             --install-dir "$HOME/install_ocean_thirdparty" || {
-              echo "=== CURL BUILD LOG ==="
-              tail -n 60 /home/runner/work/ocean/ocean/ocean_3rdparty/build/curl/*/android_arm64_static/build.log 2>/dev/null || true
+              echo "=== INSTALLED MBEDTLS LAYOUT ==="
+              find "$HOME/install_ocean_thirdparty" -maxdepth 6 2>/dev/null || true
+              echo "=== FINDMBEDTLS IN CURL SOURCE ==="
+              find /home/runner/work/ocean/ocean/ocean_3rdparty/source/curl -iname "*mbedtls*" 2>/dev/null || true
+              cat /home/runner/work/ocean/ocean/ocean_3rdparty/source/curl/*/CMake/FindMbedTLS.cmake 2>/dev/null | head -n 60 || true
               exit 1
             }
 
