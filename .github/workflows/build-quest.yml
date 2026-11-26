@@ -67,7 +67,6 @@ jobs:
           python3 - <<'EOF'
           base = "impl/application/ocean/demo/media/externalcamera/quest/"
 
-          # 1) manifest: declare the passthrough feature
           p = base + "AndroidManifest.xml"
           s = open(p).read()
           anchor = '<uses-feature android:name="android.hardware.vr.headtracking" android:required="false" />'
@@ -75,25 +74,26 @@ jobs:
           s = s.replace(anchor, anchor + '\n\t<uses-feature android:name="com.oculus.feature.PASSTHROUGH" android:required="true" />', 1)
           open(p, "w").write(s)
 
-          # 2) C++: start passthrough (same pattern as Ocean's own demos)
           p = base + "ExternalCameraApplication.cpp"
           s = open(p).read()
           anchor = "VRNativeApplicationAdvanced::onPreRender(xrPredictedDisplayTime, predictedDisplayTime);\n"
           assert anchor in s, "cpp anchor not found"
-          block = """
-	// show the real world behind the camera screen (Quest passthrough)
-	static bool passthroughStartAttempted = false;
-
-	if (!passthroughStartAttempted && passthrough_.isValid() && !passthrough_.isStarted())
-	{
-		passthroughStartAttempted = true;
-
-		if (!passthrough_.start())
-		{
-			Log::error() << "Failed to start passthrough";
-		}
-	}
-"""
+          lines = [
+              "",
+              "\t// show the real world behind the camera screen (Quest passthrough)",
+              "\tstatic bool passthroughStartAttempted = false;",
+              "",
+              "\tif (!passthroughStartAttempted && passthrough_.isValid() && !passthrough_.isStarted())",
+              "\t{",
+              "\t\tpassthroughStartAttempted = true;",
+              "",
+              "\t\tif (!passthrough_.start())",
+              "\t\t{",
+              "\t\t\tLog::error() << \"Failed to start passthrough\";",
+              "\t\t}",
+              "\t}",
+          ]
+          block = "\n".join(lines) + "\n"
           s = s.replace(anchor, anchor + block, 1)
           open(p, "w").write(s)
           print("passthrough patch applied")
