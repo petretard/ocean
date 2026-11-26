@@ -48,8 +48,19 @@ jobs:
           F=build/python/dependencies.yaml
           sed -i -E 's/^(\s*CURL_ENABLE_SSL:\s*)ON/\1OFF/' $F
           sed -i -E 's/^(\s*CURL_USE_MBEDTLS:\s*)ON/\1OFF/' $F
-          echo "--- patched lines ---"
-          grep -nE "CURL_ENABLE_SSL|CURL_USE_MBEDTLS" $F
+
+      - name: Remove Platform SDK dependency from ExternalCamera
+        run: |
+          python3 - <<'EOF'
+          import re
+          p = "impl/application/ocean/demo/media/externalcamera/CMakeLists.txt"
+          s = open(p).read()
+          s = re.sub(r'\n\s*if \(NOT TARGET ocean_platform_meta_quest_platformsdk\).*?endif\(\)\n', '\n', s, count=1, flags=re.S)
+          s = re.sub(r'\n[ \t]*ocean_platform_meta_quest_platformsdk(?=\n)', '', s)
+          open(p, "w").write(s)
+          EOF
+          echo "--- remaining references (should be none) ---"
+          grep -n "platformsdk" impl/application/ocean/demo/media/externalcamera/CMakeLists.txt || echo "none"
 
       - name: Build third-party libraries
         run: |
@@ -61,7 +72,7 @@ jobs:
         run: |
           for f in $(grep -rlE "CMake Error|FAILED:|error:" ocean_3rdparty/build --include=build.log | head -3); do
             echo "=========== $f"
-            grep -nE -A6 "CMake Error|FAILED:|error:" "$f" | head -40
+            grep -nE -A6 "CMake Error|FAILED:|error:" "$f" | cut -c1-300 | head -40
           done
 
       - name: Build ExternalCamera APK
@@ -72,13 +83,13 @@ jobs:
           echo "App dir: $APP_DIR"
           cd "$APP_DIR"
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace 2>&1 | tee "$GITHUB_WORKSPACE/gradle.log"
+          ./gradlew assembleDebug 2>&1 | tee "$GITHUB_WORKSPACE/gradle.log"
           exit ${PIPESTATUS[0]}
 
-      - name: Show gradle errors on failure
+      - name: Show build errors on failure
         if: failure()
         run: |
-          grep -nE -B2 -A8 "FAILURE|error:|What went wrong" gradle.log | head -60 || true
+          grep -nE "error:|undefined reference|fatal error|What went wrong" gradle.log | cut -c1-300 | head -30 || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -94,4 +105,3 @@ jobs:
           path: |
             3rdparty.log
             gradle.log
-            ocean_3rdparty/build/**/build.log
