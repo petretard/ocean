@@ -1,0 +1,21 @@
+name: Inspect passthrough code
+
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show passthrough-related code
+        run: |
+          echo "===== ExternalCamera manifest ====="
+          for f in $(find . -path '*externalcamera*' -name AndroidManifest.xml -not -path './ocean_3rdparty/*'); do
+            echo "--- $f"; cat "$f"
+          done
+          echo "===== passthrough in the Quest application library ====="
+          grep -rn -i "passthrough" impl/ocean/platform/meta/quest/openxr/application/ --include=*.cpp --include=*.h | cut -c1-220 | head -60
+          echo "===== passthrough in the Quest demo apps ====="
+          grep -rn -i "passthrough" impl/application/ocean/demo/platform/meta/quest/openxr/ --include=*.cpp --include=*.h | cut -c1-220 | head -40
