@@ -12,17 +12,22 @@ jobs:
       - name: Gather files
         run: |
           mkdir -p out
-          find impl/ocean/platform impl/application/ocean/demo/media/externalcamera \( -name 'ExternalCameraApplication.h' -o -name 'VRNativeApplication.h' -o -name 'VRNativeApplication.cpp' -o -name 'VRNativeApplicationAdvanced.h' -o -name 'Passthrough.h' -o -name 'Passthrough.cpp' -o -name 'Instance.h' -o -name 'Session.h' \) | sort > out/file_list.txt
-          for f in $(cat out/file_list.txt); do
-            echo "=============== $f ==============="
-            cat "$f"
-            echo
-          done > out/source_files.txt
-          grep -rniE "environment_?depth" impl | cut -c1-250 > out/depth_hits.txt || true
-          find impl/ocean/rendering \( -iname '*shader*' -o -iname '*FrameTexture2D*' \) | sort > out/rendering_files.txt || true
+          D=impl/application/ocean/demo/platform/meta/quest/openxr/depth
+          for f in $(find $D -type f | sort) \
+                   impl/application/ocean/demo/media/externalcamera/CMakeLists.txt \
+                   impl/ocean/rendering/Utilities.h \
+                   impl/ocean/rendering/BlendAttribute.h \
+                   impl/ocean/rendering/FrameTexture2D.h \
+                   impl/ocean/rendering/Texture2D.h; do
+            if [ -f "$f" ]; then
+              echo "=============== $f ==============="
+              cat "$f"
+              echo
+            fi
+          done > out/source_files2.txt
           wc -c out/*
 
       - uses: actions/upload-artifact@v4
         with:
-          name: source-files
+          name: source-files-2
           path: out/
