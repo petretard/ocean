@@ -1,0 +1,28 @@
+name: Collect source for depth patch
+
+on:
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gather files
+        run: |
+          mkdir -p out
+          find impl/ocean/platform impl/application/ocean/demo/media/externalcamera \( -name 'ExternalCameraApplication.h' -o -name 'VRNativeApplication.h' -o -name 'VRNativeApplication.cpp' -o -name 'VRNativeApplicationAdvanced.h' -o -name 'Passthrough.h' -o -name 'Passthrough.cpp' -o -name 'Instance.h' -o -name 'Session.h' \) | sort > out/file_list.txt
+          for f in $(cat out/file_list.txt); do
+            echo "=============== $f ==============="
+            cat "$f"
+            echo
+          done > out/source_files.txt
+          grep -rniE "environment_?depth" impl | cut -c1-250 > out/depth_hits.txt || true
+          find impl/ocean/rendering \( -iname '*shader*' -o -iname '*FrameTexture2D*' \) | sort > out/rendering_files.txt || true
+          wc -c out/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-files
+          path: out/
